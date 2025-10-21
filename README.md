@@ -1,2 +1,1 @@
-# group4-py-app
-Python application for tests
+Group 4 python application
