@@ -6,11 +6,11 @@ from dotenv import load_dotenv
 
 from pydantic import BaseModel, Field
 
-from app.models import models
+from app.models._base import Base
 from app.core import database
 from app.services import OpenWeatherService, OpenAQService, ActivityRepository
 from app.logic.recommender import Recommender
-from app.logic.condorcet import condorcet_winner # Nouvelle importation
+from app.logic.condorcet import condorcet_winner
 import os
 
 
