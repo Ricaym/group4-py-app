@@ -6,10 +6,26 @@ from dotenv import load_dotenv
 
 from pydantic import BaseModel, Field
 
-from app import models, database
+from app.models import models
+from app.core import database
 from app.services import OpenWeatherService, OpenAQService, ActivityRepository
-from app.recommender import Recommender
+from app.logic.recommender import Recommender
+from app.logic.condorcet import condorcet_winner # Nouvelle importation
 import os
+
+
+# Pydantic models pour le système de vote Condorcet
+class VoteOption(BaseModel):
+    activity_id: int = Field(..., description="ID de l'activité votée")
+    rank: int = Field(..., ge=1, description="Classement de l'activité (1 étant la plus préférée)")
+
+class RankedVote(BaseModel):
+    user_id: int = Field(..., description="ID de l'utilisateur votant")
+    preferences: List[VoteOption] = Field(..., description="Liste classée des préférences d'activités")
+
+class CondorcetVoteRequest(BaseModel):
+    votes: List[RankedVote] = Field(..., description="Liste des votes classés des utilisateurs")
+
 
 router = APIRouter(prefix="/activities", tags=["activities"])
 
@@ -169,3 +185,45 @@ def recommend_activities(
     recommender = Recommender(weather_service, aq_service, activity_repo)
     recs = recommender.recommend(city, date_obj, profile_data)
     return recs
+
+
+@router.post("/condorcet-vote")
+def get_condorcet_winner(vote_request: CondorcetVoteRequest):
+    """
+    Détermine le gagnant de Condorcet parmi une liste de votes classés.
+
+    Args:
+        vote_request (CondorcetVoteRequest): Les votes classés des utilisateurs.
+
+    Returns:
+        Dict[str, Any]: Le gagnant de Condorcet, ou un message si aucun gagnant clair n'est trouvé.
+    """
+    # Transformer les votes en un format utilisable par condorcet_winner
+    # Le format attendu est List[List[str]] ou List[Tuple[str, ...]]
+    # où chaque liste/tuple représente les préférences classées d'un votant.
+    # Pour simplifier, nous utiliserons les IDs d'activité comme 'noms'.
+
+    processed_votes = []
+    for user_vote in vote_request.votes:
+        # Trier les préférences par rang, puis extraire les activity_id
+        sorted_preferences = sorted(user_vote.preferences, key=lambda x: x.rank)
+        voter_preferences = [str(opt.activity_id) for opt in sorted_preferences]
+        processed_votes.append(voter_preferences)
+
+    if not processed_votes:
+        return {"message": "Aucun vote fourni.", "winner": None}
+
+    # Obtenir tous les candidats uniques des votes
+    all_candidates = set()
+    for vote_list in processed_votes:
+        all_candidates.update(vote_list)
+    
+    if not all_candidates:
+        return {"message": "Aucun candidat trouvé dans les votes.", "winner": None}
+
+    winner = condorcet_winner(processed_votes, list(all_candidates))
+
+    if winner:
+        return {"message": "Gagnant de Condorcet trouvé.", "winner_activity_id": int(winner)}
+    else:
+        return {"message": "Aucun gagnant de Condorcet clair trouvé.", "winner": None}

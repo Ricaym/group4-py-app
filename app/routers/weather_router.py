@@ -8,17 +8,21 @@ from app.services import OpenWeatherService
 
 router = APIRouter(prefix="/weather", tags=["weather"])
 
-# Dans une vraie application, l'API_KEY devrait être gérée de manière plus sécurisée
-# et le service instancié via un système de dépendances de FastAPI.
-# Pour l'instant, nous le simplifions pour le développement.'
+
 load_dotenv()
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
-weather_service = OpenWeatherService(OPENWEATHER_API_KEY)
+
+def get_weather_service() -> OpenWeatherService:
+    api_key = os.getenv("OPENWEATHER_API_KEY")
+    if not api_key or api_key.strip() == "":
+        raise HTTPException(status_code=500, detail="OPENWEATHER_API_KEY non configurée.")
+    return OpenWeatherService(api_key)
 
 @router.get("/forecast")
 def get_weather_forecast(
     city: str = Query(..., description="Nom de la ville"),
-    date: str = Query(..., description="Date des prévisions au format YYYY-MM-DD")
+    date: str = Query(..., description="Date des prévisions au format YYYY-MM-DD"),
+    weather_service: OpenWeatherService = Depends(get_weather_service)
 ):
     """
     Récupère les prévisions météorologiques pour une ville et une date données.

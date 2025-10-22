@@ -1,8 +1,8 @@
 from typing import List, Dict, Any
 from datetime import datetime
 
-from app.services import WeatherServiceInterface, AQServiceInterface, OpenWeatherService, OpenAQService
-from app.models import Activity, Profile # Assurez-vous d'importer Profile si ce n'est pas déjà fait
+from app.services import WeatherServiceInterface, AQServiceInterface
+from app.models.models import Activity, Profile # Assurez-vous d'importer Profile si ce n'est pas déjà fait
 
 class Recommender:
     """

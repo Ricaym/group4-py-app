@@ -4,7 +4,7 @@ import os
 from datetime import datetime, timedelta
 from typing import List
 from sqlalchemy.orm import Session
-from app.models import Activity, ActivityInstance, IndoorOutdoor
+from app.models.models import Activity, ActivityInstance, IndoorOutdoor
 
 
 class WeatherServiceInterface(ABC):

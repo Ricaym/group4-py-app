@@ -75,7 +75,7 @@ class Activity(Base):
         id (int): L'identifiant unique de l'activité.
         title (str): Le titre de l'activité.
         description (str): Une description détaillée de l'activité.
-        category (str): La catégorie de l'activité (ex: "sport", "culture").
+        category (str): La catégorie de l'activité (ex: "sport", "culture"). :no-index:
         indoor_outdoor (IndoorOutdoor): Indique si l'activité est en intérieur, extérieur ou mixte.
         min_age (int): L'âge minimum recommandé pour l'activité.
         meta (JSON): Métadonnées supplémentaires au format JSON.
@@ -85,7 +85,7 @@ class Activity(Base):
         requires_clear_sky (bool): Indique si l'activité nécessite un ciel dégagé.
         min_air_quality_index (int): Indice de qualité de l'air minimal requis.
         max_air_quality_index (int): Indice de qualité de l'air maximal requis.
-        average_rating (float): La note moyenne de l'activité.
+        average_rating (float): La note moyenne de l'activité. :no-index:
         votes (int): Le nombre total de votes reçus pour l'activité.
         created_at (datetime): La date et l'heure de création de l'activité.
         updated_at (datetime): La date et l'heure de la dernière mise à jour de l'activité.

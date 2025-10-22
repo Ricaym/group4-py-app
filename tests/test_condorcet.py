@@ -1,4 +1,4 @@
-from app.condorcet import condorcet_winner
+from app.logic.condorcet import condorcet_winner
 
 def test_simple_condorcet():
     rankings = [
