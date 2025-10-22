@@ -7,3 +7,6 @@ from .profile import Profile
 from .activity import Activity
 from .activity_instance import ActivityInstance
 from .vote import Vote
+from .weather import Meteo  
+from .recommendation import Recommandation   
+from .history import Historique
