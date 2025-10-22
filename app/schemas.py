@@ -72,6 +72,13 @@ class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
+class TokenWithUser(Token):
+    """
+    Schéma Pydantic pour le jeton d'accès et les informations de l'utilisateur
+    retournés après une connexion réussie.
+    """
+    user: UtilisateurRead
+
 class TokenData(BaseModel):
     """
     Schéma Pydantic pour les données contenues dans le jeton JWT.

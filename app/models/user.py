@@ -31,3 +31,5 @@ class User(Base):
 
     profile = relationship("Profile", back_populates="user", uselist=False)
     votes = relationship("Vote", back_populates="user")
+    recommandations = relationship("Recommandation", back_populates="utilisateur")
+    historique = relationship("Historique", back_populates="utilisateur")

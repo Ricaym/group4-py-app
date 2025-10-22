@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models._base import Base
+from app.models.user import User
 from app import schemas
 from passlib.context import CryptContext
 import uuid 
@@ -108,14 +109,14 @@ def create_user(user: schemas.UtilisateurCreate, db: Session = Depends(get_db)):
     if user.role == schemas.UserRole.ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="La création de comptes administrateur via l'API n'est pas autorisée.")
 
-    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    db_user = db.query(User).filter(User.email == user.email).first()
     if db_user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email déjà enregistré")
 
     hashed_password = get_password_hash(user.mot_de_passe)
     verification_token = str(uuid.uuid4()) # Génère un token unique
 
-    db_user = models.User(
+    db_user = User(
         name=user.nom,
         email=user.email,
         hashed_password=hashed_password,
@@ -131,14 +132,14 @@ def create_user(user: schemas.UtilisateurCreate, db: Session = Depends(get_db)):
 
     return schemas.UtilisateurRead.model_validate(db_user)
 
-@router.post("/token", response_model=schemas.Token)
+@router.post("/token", response_model=schemas.TokenWithUser) # Changement ici: Utilisé TokenWithUser
 async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
 ):
     """
     Authentifie un utilisateur et retourne un jeton d'accès JWT.
     """
-    user = db.query(models.User).filter(models.User.email == form_data.username).first()
+    user = db.query(User).filter(User.email == form_data.username).first()
     
     if not user:
         raise HTTPException(
@@ -166,10 +167,14 @@ async def login_for_access_token(
     access_token = create_access_token(
         data={"sub": user.email}, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": schemas.UtilisateurRead.model_validate(user) # Ajout des infos utilisateur ici
+    }
 
 # Fonction utilitaire pour obtenir l'utilisateur actuel (nécessaire pour les routes protégées)
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User: # <-- Ajout du type de retour pour la dépendance
     """
     Dépendance pour récupérer l'utilisateur actuellement authentifié à partir du jeton JWT.
     """
@@ -186,14 +191,14 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         token_data = schemas.TokenData(email=email)
     except JWTError:
         raise credentials_exception
-    user = db.query(models.User).filter(models.User.email == token_data.email).first()
+    user = db.query(User).filter(User.email == token_data.email).first() # <-- Modifié ici: models.User -> User
     if user is None:
         raise credentials_exception
     return user
 
 # Exemple de route protégée (vous pouvez l'ajouter pour tester)
 @router.get("/me/", response_model=schemas.UtilisateurRead)
-async def read_users_me(current_user: models.User = Depends(get_current_user)):
+async def read_users_me(current_user: User = Depends(get_current_user)): # <-- Modifié ici: models.User -> User
     """
     Récupère les informations de l'utilisateur actuellement authentifié.
     """
@@ -204,7 +209,7 @@ def verify_email(token: str, db: Session = Depends(get_db)):
     """
     Vérifie l'adresse email d'un utilisateur à l'aide d'un jeton de vérification.
     """
-    user = db.query(models.User).filter(models.User.verification_token == token).first()
+    user = db.query(User).filter(User.verification_token == token).first() # <-- Modifié ici: models.User -> User
 
     # Base HTML et CSS pour un look moderne
     base_html_template = """
@@ -316,7 +321,7 @@ def verify_email(token: str, db: Session = Depends(get_db)):
 @router.put("/password", status_code=status.HTTP_200_OK)
 async def update_password(
     password_update: schemas.PasswordUpdate,
-    current_user: models.User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user), # <-- Modifié ici: models.User -> User
     db: Session = Depends(get_db)
 ):
     """
@@ -345,7 +350,7 @@ def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """
     Récupère une liste d'utilisateurs.
     """
-    users = db.query(models.User).offset(skip).limit(limit).all()
+    users = db.query(User).offset(skip).limit(limit).all() # <-- Modifié ici: models.User -> User
     return [schemas.UtilisateurRead.model_validate(user) for user in users]
 
 @router.get("/{user_id}", response_model=schemas.UtilisateurRead)
@@ -353,7 +358,7 @@ def read_user(user_id: int, db: Session = Depends(get_db)):
     """
     Récupère un utilisateur spécifique par son ID.
     """
-    user = db.query(models.User).filter(models.User.id == user_id).first()
+    user = db.query(User).filter(User.id == user_id).first() # <-- Modifié ici: models.User -> User
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilisateur non trouvé")
     return schemas.UtilisateurRead.model_validate(user)
@@ -363,7 +368,7 @@ def update_user(user_id: int, user_update: schemas.UtilisateurUpdate, db: Sessio
     """
     Met à jour les informations d'un utilisateur existant.
     """
-    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    db_user = db.query(User).filter(User.id == user_id).first() # <-- Modifié ici: models.User -> User
     if db_user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilisateur non trouvé")
 
@@ -386,7 +391,7 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
     """
     Supprime un utilisateur spécifique par son ID.
     """
-    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    db_user = db.query(User).filter(User.id == user_id).first() # <-- Modifié ici: models.User -> User
     if db_user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilisateur non trouvé")
     db.delete(db_user)

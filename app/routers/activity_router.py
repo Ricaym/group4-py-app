@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 
 from pydantic import BaseModel, Field
 
+from app.models.enums import IndoorOutdoor
+
 from app.models._base import Base
 from app.core import database
 from app.services import OpenWeatherService, OpenAQService, ActivityRepository
@@ -54,7 +56,7 @@ class ActivityBase(BaseModel):
     title: str = Field(..., example="Randonnée en forêt")
     description: Optional[str] = Field(None, example="Une belle randonnée pour toute la famille.")
     category: Optional[str] = Field(None, example="Plein air")
-    indoor_outdoor: models.IndoorOutdoor = Field(models.IndoorOutdoor.MIX, example="outdoor")
+    indoor_outdoor: IndoorOutdoor = Field(IndoorOutdoor.MIX, example="outdoor")
     min_age: Optional[int] = Field(0, example=6)
     min_temperature_celsius: Optional[float] = Field(None, example=10.0)
     max_temperature_celsius: Optional[float] = Field(None, example=25.0)

@@ -48,3 +48,5 @@ class Activity(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     instances = relationship("ActivityInstance", back_populates="activity")
+    historique_choix = relationship("Historique", back_populates="activite")
+    recommandations = relationship("Recommandation", back_populates="activite")
