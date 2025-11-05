@@ -26,6 +26,8 @@ class User(Base):
     role = Column(Enum(UserRole, values_callable=lambda obj: [e.value for e in obj]), default=UserRole.USER, nullable=False)
     is_verified = Column(Boolean, default=False)
     verification_token = Column(String, unique=True, nullable=True)
+    age = Column(Integer, nullable=True)
+    sex = Column(Enum('M', 'F', 'O', name='sex_enum'), nullable=True)  # M=Male, F=Female, O=Other
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
