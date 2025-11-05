@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 from app.models.enums import IndoorOutdoor
+from app.models.profile import Profile
 
 from app.models._base import Base
 from app.core import database
@@ -14,6 +15,7 @@ from app.services import OpenWeatherService, OpenAQService, ActivityRepository
 from app.logic.recommender import Recommender
 from app.logic.condorcet import condorcet_winner
 import os
+from app.core.config import settings
 
 
 # Pydantic models pour le système de vote Condorcet
@@ -49,7 +51,7 @@ def get_weather_service() -> OpenWeatherService:
     return OpenWeatherService(api_key)
 
 def get_aq_service() -> OpenAQService:
-    return OpenAQService()
+    return OpenAQService(api_key=settings.openaq_api_key)
 
 
 class ActivityBase(BaseModel):
@@ -76,7 +78,7 @@ class ActivityRead(ActivityBase):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class ActivityInstanceBase(BaseModel):
     activity_id: int = Field(..., example=1)
@@ -93,7 +95,7 @@ class ActivityInstanceRead(ActivityInstanceBase):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 @router.get("", response_model=List[ActivityRead])
 def list_activities(activity_repo: ActivityRepository = Depends(get_activity_repository)):
@@ -179,7 +181,7 @@ def recommend_activities(
 
     profile_data: Dict[str, Any] = {"outdoor_pref": 0.5, "children_friendly": False} # Profil par défaut
     if user_id:
-        user_profile = db.query(models.Profile).filter(models.Profile.user_id == user_id).first()
+        user_profile = db.query(Profile).filter(Profile.user_id == user_id).first()
         if user_profile:
             profile_data["outdoor_pref"] = user_profile.outdoor_pref
             profile_data["children_friendly"] = user_profile.children_friendly
@@ -224,8 +226,10 @@ def get_condorcet_winner(vote_request: CondorcetVoteRequest):
         return {"message": "Aucun candidat trouvé dans les votes.", "winner": None}
 
     winner = condorcet_winner(processed_votes, list(all_candidates))
+    print(f"DEBUG: (winner) : {winner}")
+
 
     if winner:
-        return {"message": "Gagnant de Condorcet trouvé.", "winner_activity_id": int(winner)}
+        return {"message": "Gagnant de Condorcet trouvé.", "winner_activity_id": int(winner[0])}
     else:
         return {"message": "Aucun gagnant de Condorcet clair trouvé.", "winner": None}
