@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Depends
 import requests
 import os
@@ -21,6 +22,7 @@ def get_weather_service() -> OpenWeatherService:
 @router.get("/forecast")
 def get_weather_forecast(
     city: str = Query(..., description="Nom de la ville"),
+    #country: Optional[str] = Query(None, description="Code du pays (ex: US pour les États-Unis)"),
     date: str = Query(..., description="Date des prévisions au format YYYY-MM-DD"),
     weather_service: OpenWeatherService = Depends(get_weather_service)
 ):
