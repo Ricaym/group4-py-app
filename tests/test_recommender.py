@@ -2,7 +2,7 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 from app.logic.recommender import Recommender
-from app.models.models import Activity, IndoorOutdoor
+from app.models import Activity, IndoorOutdoor
 
 def test_recommender_basic_recommendation():
     # Mocks pour les dépendances

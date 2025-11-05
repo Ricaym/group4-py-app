@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import requests
 
 from app.services import OpenWeatherService, OpenAQService, ActivityRepository
-from app.models.models import Activity, ActivityInstance, IndoorOutdoor
+from app.models import Activity, ActivityInstance, IndoorOutdoor
 
 # Tests pour OpenWeatherService
 @patch('app.services.requests.get')
