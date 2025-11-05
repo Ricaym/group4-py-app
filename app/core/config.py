@@ -9,6 +9,13 @@ class Settings(BaseSettings):
     secret_key: str
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
+    ticketmaster_api_key: str
+    openaq_api_key: str
+    openaq_base_url: str
+    mail_api_key: str
+    #mongodb_url: str
+    #mongodb_db_name: str
+    database_url: str
 
     class Config:
         env_file = ".env"
