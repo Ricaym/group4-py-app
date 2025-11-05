@@ -2,11 +2,12 @@ from abc import ABC, abstractmethod
 import requests
 import os
 from datetime import datetime, timedelta
-from typing import List
+from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 from app.models.activity import Activity
 from app.models.activity_instance import ActivityInstance
 from app.models.enums import IndoorOutdoor
+from app.core.config import settings
 
 
 class WeatherServiceInterface(ABC):
@@ -42,7 +43,7 @@ class OpenWeatherService(WeatherServiceInterface):
         Raises:
             requests.exceptions.RequestException: Si une erreur survient lors de la requête API.
         """
-        params = {"q": city, "appid": self.api_key, "units": "metric"}
+        params = {"q": city, "appid": self.api_key, "units": "metric", "lang":"fr",}
         resp = requests.get("https://api.openweathermap.org/data/2.5/forecast", params=params, timeout=10)
         resp.raise_for_status()
         data = resp.json()
@@ -101,10 +102,11 @@ class OpenAQService(AQServiceInterface):
     """
     Implémentation du service de qualité de l'air utilisant l'API OpenAQ.
     """
-    def __init__(self):
-        # OpenAQ ne nécessite pas de clé API pour les données publiques.
-        # Cependant, une gestion des URLs de base est une bonne pratique.
-        self.base_url = "https://api.openaq.org/v2/measurements"
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+        # OpenAQ ne nécessite plus de clé API pour les données publiques (pour la v3).
+        # Une gestion des URLs de base est une bonne pratique.
+        self.base_url = settings.openaq_base_url
 
     def get_aq_data(self, city: str, date: datetime) -> dict:
         """
@@ -129,12 +131,23 @@ class OpenAQService(AQServiceInterface):
             "sort": "desc",
             "order_by": "datetime"
         }
-        resp = requests.get(self.base_url, params=params, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-
+        headers = {"X-API-Key": self.api_key}
+        data = None # Initialize data to None
+        try:
+            resp = requests.get(self.base_url, params=params, headers=headers, timeout=10)
+            resp.raise_for_status()
+            data = resp.json()
+        except requests.exceptions.RequestException as e:
+            print(f"Erreur lors de la récupération des données OpenAQ pour {city}, {date}: {e}")
+            return {
+                "city": city,
+                "date": date.isoformat(),
+                "aqi": None,
+                "source": "OpenAQ",
+                "raw_data": {"error": str(e)}
+            }
         aqi_value = None
-        if data["results"]:
+        if data and data["results"]:
             # Calculer la moyenne des mesures PM2.5 comme un proxy simple pour l'AQI
             pm25_values = [res["value"] for res in data["results"] if res["parameter"] == "pm25"]
             if pm25_values:
@@ -214,3 +227,71 @@ class ActivityRepository:
         self.db.commit()
         self.db.refresh(new_instance)
         return new_instance
+
+# --- Nouveaux services pour les événements ---
+
+class EventServiceInterface(ABC):
+    """
+    Interface pour les services de récupération d'événements.
+    """
+    @abstractmethod
+    def search_events(self, city: str, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
+        """
+        Recherche des événements pour une ville et une plage de dates données.
+        """
+        pass
+
+class TicketMasterService(EventServiceInterface):
+    """
+    Implémentation du service d'événements utilisant l'API TicketMaster.
+    """
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+        self.base_url = "https://app.ticketmaster.com/discovery/v2/events.json"
+
+    def search_events(self, city: str, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
+        """
+        Recherche des événements via l'API TicketMaster.
+
+        Args:
+            city (str): La ville pour laquelle rechercher des événements.
+            start_date (datetime): La date de début de la recherche.
+            end_date (datetime): La date de fin de la recherche.
+
+        Returns:
+            List[Dict[str, Any]]: Une liste de dictionnaires représentant les événements trouvés.
+        """
+        params = {
+            "apikey": self.api_key,
+            "city": city,
+            "startDateTime": start_date.isoformat(timespec='seconds') + "Z",
+            "endDateTime": end_date.isoformat(timespec='seconds') + "Z",
+            "size": 20 # Limite le nombre de résultats pour cet exemple
+        }
+        try:
+            response = requests.get(self.base_url, params=params, timeout=10)
+            response.raise_for_status() # Lève une exception pour les codes d'erreur HTTP
+            data = response.json()
+            
+            events = []
+            if '_embedded' in data and 'events' in data['_embedded']:
+                for event in data['_embedded']['events']:
+                    # Simplifie les données de l'événement pour un usage interne
+                    event_info = {
+                        "id": event.get("id"),
+                        "name": event.get("name"),
+                        "url": event.get("url"),
+                        "start_date_time": event['dates']['start'].get('dateTime'),
+                        "end_date_time": event['dates'].get('end', {}).get('dateTime'),
+                        "city": event['_embedded']['venues'][0]['city'].get('name') if '_embedded' in event and 'venues' in event['_embedded'] and event['_embedded']['venues'] else None,
+                        "venue": event['_embedded']['venues'][0].get('name') if '_embedded' in event and 'venues' in event['_embedded'] and event['_embedded']['venues'] else None,
+                        "genres": [genre.get('name') for genre in event.get('classifications', []) if genre.get('segment', {}).get('name') == 'Arts & Theatre'] # Exemple: Filtrer par genre
+                    }
+                    events.append(event_info)
+            return events
+        except requests.exceptions.RequestException as e:
+            print(f"Erreur lors de la récupération des événements TicketMaster: {e}")
+            return []
+        except Exception as e:
+            print(f"Une erreur inattendue est survenue: {e}")
+            return []
