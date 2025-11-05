@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models._base import Base
 from app.models.user import User
+from app.models.profile import Profile 
 from app import schemas
 from passlib.context import CryptContext
 import uuid 
@@ -19,6 +20,10 @@ from jose import JWTError, jwt
 from datetime import timedelta
 
 from app.core.config import settings
+
+# Imports Brevo # REMOVED: No longer using Brevo for email sending
+# import sib_api_v3_sdk
+# from sib_api_v3_sdk.rest import ApiException
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -50,7 +55,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # Fonction pour envoyer un email de vérification réel
 def send_verification_email(user_name: str, user_email: str, verification_token: str): # Ajout de user_email ici
     """
-    Envoie un email de vérification à l'utilisateur avec un lien d'activation.
+    Envoie un email de vérification à l'utilisateur avec un lien d'activation via Zoho Mail.
     """
     verification_link = f"http://localhost:8000/users/verify-email?token={verification_token}"
     
@@ -81,12 +86,30 @@ def send_verification_email(user_name: str, user_email: str, verification_token:
     msg = MIMEText(html_body, 'html')
     msg['Subject'] = "Activez votre compte Météo Activités"
     msg['From'] = settings.smtp_user
-    msg['To'] = user_email # user_email est maintenant défini
-    
-    with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
-        server.starttls()
-        server.login(settings.smtp_user, settings.smtp_pass)
-        server.send_message(msg)
+    msg['To'] = user_email
+
+    # --- DEBUG: Affichage des valeurs des variables avant l'envoi ---
+    print(f"DEBUG: (user_router) Hôte SMTP : {settings.smtp_host}")
+    print(f"DEBUG: (user_router) Port SMTP : {settings.smtp_port}")
+    print(f"DEBUG: (user_router) Utilisateur SMTP : {settings.smtp_user}")
+    print(f"DEBUG: (user_router) Mot de passe SMTP (partiel) : {settings.smtp_pass}") 
+    print(f"DEBUG: (user_router) Nom de l'utilisateur : {user_name}")
+    print(f"DEBUG: (user_router) Email de l'utilisateur : {user_email}")
+    print(f"DEBUG: (user_router) Token de vérification : {verification_token}")
+    print(f"DEBUG: (user_router) Lien de vérification : {verification_link}")
+    print(f"DEBUG: (user_router) Sujet de l'email : {msg['Subject']}")
+    print(f"DEBUG: (user_router) Expéditeur de l'email : {msg['From']}")
+    print(f"DEBUG: (user_router) Destinataire de l'email : {msg['To']}")
+    print("-" * 30)
+
+    try:
+        with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port) as server:
+            server.login(settings.smtp_user, settings.smtp_pass)
+            server.sendmail(settings.smtp_user, user_email, msg.as_string())
+        print(f"Email de vérification envoyé à {user_email}")
+    except Exception as e:
+        print(f"Erreur lors de l'envoi de l'email via Zoho Mail: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erreur lors de l'envoi de l'email de vérification.")
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """
@@ -122,7 +145,9 @@ def create_user(user: schemas.UtilisateurCreate, db: Session = Depends(get_db)):
         hashed_password=hashed_password,
         role=user.role,
         is_verified=False, # Nouveau compte non vérifié par défaut
-        verification_token=verification_token
+        verification_token=verification_token,
+        age=user.age,
+        sex=user.sex
     )
     db.add(db_user)
     db.commit()
@@ -301,7 +326,8 @@ def verify_email(token: str, db: Session = Depends(get_db)):
             icon_class="fas fa-exclamation-triangle",
             heading="Compte déjà vérifié",
             message="Votre compte est déjà vérifié. Vous pouvez maintenant vous connecter.",
-            extra_content='<a href="http://localhost:8000/docs" class="button">Se connecter</a>'
+            #extra_content='<a href="http://localhost:8000/docs" class="button">Se connecter</a>'
+            extra_content=""
         ), status_code=status.HTTP_400_BAD_REQUEST)
 
     user.is_verified = True
@@ -315,7 +341,8 @@ def verify_email(token: str, db: Session = Depends(get_db)):
         icon_class="fas fa-check-circle",
         heading="Vérification réussie !",
         message="Votre compte a été vérifié avec succès ! Vous pouvez maintenant vous connecter.",
-        extra_content='<a href="http://localhost:8000/docs" class="button">Se connecter</a>'
+       # extra_content='<a href="http://localhost:8000/docs" class="button">Se connecter</a>'
+        extra_content=""
     ))
 
 @router.put("/password", status_code=status.HTTP_200_OK)
@@ -344,6 +371,62 @@ async def update_password(
     db.refresh(current_user)
     
     return {"message": "Mot de passe mis à jour avec succès"}
+
+# --- Endpoints de gestion des profils ---
+
+@router.post("/me/profile", response_model=schemas.ProfileRead, status_code=status.HTTP_201_CREATED)
+async def create_my_profile(
+    profile_data: schemas.ProfileCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Crée un nouveau profil pour l'utilisateur actuellement authentifié.
+    Un utilisateur ne peut avoir qu'un seul profil.
+    """
+    db_profile = db.query(Profile).filter(Profile.user_id == current_user.id).first()
+    if db_profile:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Le profil existe déjà pour cet utilisateur.")
+
+    new_profile = Profile(**profile_data.model_dump(), user_id=current_user.id)
+    db.add(new_profile)
+    db.commit()
+    db.refresh(new_profile)
+    return new_profile
+
+@router.get("/me/profile", response_model=schemas.ProfileRead)
+async def read_my_profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Récupère le profil de l'utilisateur actuellement authentifié.
+    """
+    db_profile = db.query(Profile).filter(Profile.user_id == current_user.id).first()
+    if db_profile is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profil non trouvé pour cet utilisateur.")
+    return db_profile
+
+@router.put("/me/profile", response_model=schemas.ProfileRead)
+async def update_my_profile(
+    profile_data: schemas.ProfileUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Met à jour le profil de l'utilisateur actuellement authentifié.
+    """
+    db_profile = db.query(Profile).filter(Profile.user_id == current_user.id).first()
+    if db_profile is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profil non trouvé pour cet utilisateur.")
+
+    update_data = profile_data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_profile, key, value)
+    
+    db.commit()
+    db.refresh(db_profile)
+    return db_profile
 
 @router.get("/", response_model=List[schemas.UtilisateurRead])
 def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
