@@ -22,6 +22,8 @@ class Profile(Base):
     user_id = Column(Integer, ForeignKey("users.id"), unique=True)
     outdoor_pref = Column(Float, default=0.5)  # 0 = indoors only, 1 = outdoors preferred
     children_friendly = Column(Boolean, default=False)
+    commute_time = Column(Integer, nullable=True) # temps de trajet en minutes
+    activity_intensity_pref = Column(Float, default=0.5) # 0 = faible, 1 = élevée
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
